@@ -1,5 +1,7 @@
 # Serial Pheriperal Interface communication with UHF RFID reader and PC/Raspberry pi
 # MySQL Database connection and data storing in to Deployed database
+import time
+
 import serial
 import abc
 import socket
@@ -162,7 +164,7 @@ class ReaderResponseFrame(object):
         if self.len + offset > len(resp_bytes) - 1:
             raise ValueError(
                 'Response does not contain enough bytes for frame (expected %d bytes after offset %d, actual length %d)' % (
-                self.len, offset, len(resp_bytes)))
+                    self.len, offset, len(resp_bytes)))
         self.reader_addr = resp_bytes[offset + 1]
         self.resp_cmd = resp_bytes[offset + 2]
         self.result_status = resp_bytes[offset + 3]
@@ -269,7 +271,7 @@ class BaseTransport(object):
 
 class SerialTransport(BaseTransport):
     # Todo: change device port from 'COM3' to '/dev/ttyUSB0' if use Raspberry pi or any Linux OS
-    def __init__(self, device='/dev/ttyUSB0', baud_rate=57600, timeout=5):
+    def __init__(self, device='COM3', baud_rate=57600, timeout=5):
         self.serial = serial.Serial(device, baud_rate, timeout=timeout)
 
     def read_bytes(self, length):
@@ -498,18 +500,22 @@ get_inventory_288 = G2InventoryCommand(q_value=4, antenna=0x80)
 get_inventory_uhfreader18 = ReaderCommand(G2_TAG_INVENTORY)
 
 # Todo: change device port from 'COM3' to '/dev/ttyUSB0' if use Raspberry pi or any Linux OS
-transport = SerialTransport(device='/dev/ttyUSB0')
+transport = SerialTransport(device='COM3')
 # transport = TcpTransport(reader_addr='192.168.0.250', reader_port=27011)
 # transport = TcpTransport(reader_addr='192.168.1.190', reader_port=6000)
-runner = CommandRunner(transport)
+# runner = CommandRunner(transport)
 
 # transport.write(get_inventory_288.serialize())
-transport.write(get_inventory_uhfreader18.serialize())
+# changed...
+# transport.write(get_inventory_uhfreader18.serialize())
 inventory_status = None
 while inventory_status is None or inventory_status == G2_TAG_INVENTORY_STATUS_MORE_FRAMES:
+    inventory_status = None
+    transport.write(get_inventory_uhfreader18.serialize())
     # g2_response = G2InventoryResponseFrame288(transport.read_frame())
     g2_response = G2InventoryResponseFrame18(transport.read_frame())
-    inventory_status = g2_response.result_status
+    # changed
+    # inventory_status = g2_response.result_status
     for tag in g2_response.get_tag():
         print('Antenna %d: EPC %s, RSSI %s' % (tag.antenna_num, tag.epc.hex(), tag.rssi))
         try:
@@ -535,5 +541,5 @@ while inventory_status is None or inventory_status == G2_TAG_INVENTORY_STATUS_MO
             print("data has been updated!")
         except mysql.connector.Error as error:
             print("Failed to update table record: {}".format(error))
-
+    time.sleep(3)
 transport.close()
